@@ -1,0 +1,1376 @@
+<?php
+
+/**
+ * Implements hook_node_view.
+ */
+function dosm_sysadmin_node_view($node, $view_mode, $langcode) {
+  if ($node->type == 'dosm_machine' || $node->type == 'dosm_user') {
+    // check if the server is responding
+    if (dosm_sysadmin_display_machine_status($node) && dosm_sysadmin_can_see_machine_form($node)) {
+      $form_name = $node->type == 'dosm_user' ? 'dosm_sysadmin_user_form' : 'dosm_sysadmin_machine_form';
+      $node->content['dosm_sysadmin_users_list'] = drupal_get_form($form_name, $node);
+    }
+  }
+}
+
+function dosm_sysadmin_can_see_machine_form($node, $account=null) {
+  global $user;
+  if (dosm_is_manager($user->uid, $node) || $user->uid == 1) {
+    return TRUE;
+  }
+  if ($node->type == 'dosm_user') {
+    if ($node->field_dosm_user_uid[LANGUAGE_NONE][0]['target_id'] == $user->uid) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+function dosm_sysadmin_display_machine_status(&$node) {
+  // check the content type
+  switch($node->type) {
+    case 'dosm_machine':
+      $url = $node->field_dosm_machine_url[LANGUAGE_NONE][0]['value'];
+      $port = $node->field_dosm_machine_port[LANGUAGE_NONE][0]['value'];
+      $path = $node->field_dosm_machine_path[LANGUAGE_NONE][0]['value'];
+      break;
+    case 'dosm_simulator':
+    case 'dosm_user':
+      // get the machine
+      $url = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity']->field_dosm_machine_url[LANGUAGE_NONE][0]['value'];
+      $port = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity']->field_dosm_machine_port[LANGUAGE_NONE][0]['value'];
+      $path = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity']->field_dosm_machine_path[LANGUAGE_NONE][0]['value'];
+      break;
+  }
+
+  $params = array(
+    'url' => $url,
+    'port' => $port,
+    'path' => $path,
+    'method' => 'ping',
+    'params' => array()
+  );
+  $response = dosm_xmlrpc_call($params);
+  if (!$response['success']) {
+    $node->content['dosm_sysadmin_server_status'] = array(
+      '#type' => 'item',
+      '#title' => t('Server status'),
+      '#markup' => '<div class="messages error alert alert-danger">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>'
+    );
+    return FALSE;
+  }
+  $node->content['dosm_sysadmin_server_status'] = array(
+    '#type' => 'item',
+    '#title' => t('Server status'),
+    '#weight' => -99,
+    '#markup' => '<div class="messages status alert alert-success">'. t('The machine remote is online'). '</div>'
+  );
+  return TRUE;
+}
+
+function dosm_sysadmin_machine_form($form, &$form_state, $node) {
+  // get the sim users
+  $url = $node->field_dosm_machine_url[LANGUAGE_NONE][0]['value'];
+  $port = $node->field_dosm_machine_port[LANGUAGE_NONE][0]['value'];
+  $path = $node->field_dosm_machine_path[LANGUAGE_NONE][0]['value'];
+  $params = array(
+    'url' => $url,
+    'port' => $port,
+    'path' => $path,
+    'method' => 'get_sim_users',
+    'params' => array(
+      'password' => $node->field_dosm_machine_password[LANGUAGE_NONE][0]['value']
+    )
+  );
+  $response = dosm_xmlrpc_call($params);
+  if ($response['success']) {
+    $sim_users = $response['data']['sim_users'];
+
+    // overview
+    $sub_form = drupal_get_form('dosm_sysadmin_overview_form', $sim_users);
+    $form['overview'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form)
+    );
+
+    // show users
+    $form['sim_users'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Sim users'),
+      '#collapsible' => False,
+      '#collapsed' => True,
+    );
+
+    foreach ($sim_users as $sim_user_id => $sim_user) {
+      $form['sim_users'][$sim_user_id] = array(
+        '#type' => 'fieldset',
+        '#title' => $sim_user['name'],
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+      );
+
+      // show values
+      $sub_form = drupal_get_form('dosm_sysadmin_values_form', $sim_user);
+      $form['sim_users'][$sim_user_id]['values'] = array(
+        '#type' => 'item',
+        '#markup' => drupal_render($sub_form)
+      );
+
+      // show oars
+      if ($sim_user['has_oar_folder']) {
+        $sub_form = drupal_get_form('dosm_sysadmin_oars_form', $sim_user['oars'], $sim_users, $params);
+        $form['sim_users'][$sim_user_id]['oars'] = array(
+          '#type' => 'item',
+          '#markup' => drupal_render($sub_form)
+        );
+      }
+
+      // show iars
+      if ($sim_user['has_iar_folder']) {
+        $sub_form = drupal_get_form('dosm_sysadmin_iars_form', $sim_user['iars'], $sim_users, $params);
+        $form['sim_users'][$sim_user_id]['iars'] = array(
+          '#type' => 'item',
+          '#markup' => drupal_render($sub_form)
+        );
+      }
+
+      // show sims
+      $form['sim_users'][$sim_user_id]['sims'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Sims'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE
+      );
+      foreach ($sim_user['sims'] as $sim_id => $sim) {
+        $sim['sim_user_id'] = $sim_user_id;
+        $sim['sim_id'] = $sim_id;
+        $sub_form = drupal_get_form('dosm_sysadmin_sim_form', $sim, $params);
+        $form['sim_users'][$sim_user_id]['sims'][$sim_id] = array(
+          '#type' => 'item',
+          '#markup' => drupal_render($sub_form)
+        );
+      }
+    }
+  }
+  else {
+    $form['sim_users'][] = array(
+      '#type' => 'item',
+      '#title' => t('Server status'),
+      '#markup' => '<div class="messages error alert alert-danger">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>'
+    );
+  }
+  return $form;
+}
+
+function dosm_sysadmin_user_form($form, &$form_state, $node) {
+  // get the sim users
+  $url = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity']->field_dosm_machine_url[LANGUAGE_NONE][0]['value'];
+  $port = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity']->field_dosm_machine_port[LANGUAGE_NONE][0]['value'];
+  $path = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity']->field_dosm_machine_path[LANGUAGE_NONE][0]['value'];
+  $params = array(
+    'url' => $url,
+    'port' => $port,
+    'path' => $path,
+    'method' => 'get_sim_user',
+    'params' => array(
+      'password' => $node->field_dosm_machine[LANGUAGE_NONE][0]['entity']->field_dosm_machine_password[LANGUAGE_NONE][0]['value'],
+      'username' => $node->field_dosm_user_username[LANGUAGE_NONE][0]['value']
+    )
+  );
+  $response = dosm_xmlrpc_call($params);
+  if ($response['success']) {
+    $sim_user = $response['data']['sim_user'];
+    $sim_users = array($sim_user);
+    $sims = $sim_user['sims'];
+
+    // show values
+    $sub_form = drupal_get_form('dosm_sysadmin_values_form', $sim_user);
+    $form['values'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form)
+    );
+
+    // show oars
+    if ($sim_user['has_oar_folder']) {
+      $sub_form = drupal_get_form('dosm_sysadmin_oars_form', $sim_user['oars'], $sim_users, $params);
+      $form['oars'] = array(
+        '#type' => 'item',
+        '#markup' => drupal_render($sub_form)
+      );
+    }
+
+    // show iars
+    if ($sim_user['has_iar_folder']) {
+      $sub_form = drupal_get_form('dosm_sysadmin_iars_form', $sim_user['iars'], $sim_users, $params);
+      $form['iars'] = array(
+        '#type' => 'item',
+        '#markup' => drupal_render($sub_form)
+      );
+    }
+
+    // show sims
+    $form['sims'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Sims'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE
+    );
+    foreach ($sims as $sim_id => $sim) {
+      $sim['sim_user_id'] = $node->field_dosm_user_username[LANGUAGE_NONE][0]['value'];
+      $sim['sim_id'] = $sim_id;
+      $sub_form = drupal_get_form('dosm_sysadmin_sim_form', $sim, $params);
+      $form['sims'][$sim_id] = array(
+        '#type' => 'item',
+        '#markup' => drupal_render($sub_form)
+      );
+    }
+  }
+  else {
+    $form['sim_users'][] = array(
+      '#type' => 'item',
+      '#title' => t('Server status'),
+      '#markup' => '<div class="messages error alert alert-danger">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>'
+    );
+  }
+  return $form;
+}
+
+function dosm_sysadmin_overview_form($form, &$form_state, $sim_users) {
+  $form['overview'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Overview'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $header = array(
+    'name',
+    'oar ok',
+    'oars',
+    'iar ok',
+    'iars',
+    'sims',
+    'sims details',
+  );
+  $sim_header = array(
+    'name',
+    'port',
+    'uuid',
+  );
+  $region_header = array(
+    'name',
+    'alive',
+    'valid',
+    'port',
+    'radmin',
+    'regions',
+    'regions details',
+  );
+  $rows = array();
+  foreach ($sim_users as $sim_user) {
+    $row = array();
+    $row[] = $sim_user['name'];
+    $row[] = $sim_user['has_oar_folder'] ? '<img src="/misc/watchdog-ok.png" title="Yes"/>' : '<img src="/misc/watchdog-error.png" title="No"/>';
+    $row[] = count($sim_user['oars']);
+    $row[] = $sim_user['has_iar_folder'] ? '<img src="/misc/watchdog-ok.png" title="Yes"/>' : '<img src="/misc/watchdog-error.png" title="No"/>';
+    $row[] = count($sim_user['iars']);
+    $sim_count = count($sim_user['sims']);
+    $row[] = $sim_count;
+    if ($sim_count) {
+      $sim_rows = array();
+      foreach ($sim_user['sims'] as $sim) {
+        $sim_row = array();
+        $sim_row[] = $sim['name'];
+        $sim_row[] = $sim['alive'] ? '<img src="/misc/watchdog-ok.png" title="Yes"/>' : '<img src="/misc/watchdog-error.png" title="No"/>';
+        $sim_row[] = $sim['valid'] ? '<img src="/misc/watchdog-ok.png" title="Yes"/>' : '<img src="/misc/watchdog-error.png" title="No"/>';
+        $sim_row[] = $sim['port'];
+        $sim_row[] = $sim['radmin_ready'] ? '<img src="/misc/watchdog-ok.png" title="Yes"/>' : '<img src="/misc/watchdog-error.png" title="No"/>';
+        $regions_count = count($sim['regions']);
+        $sim_row[] = $regions_count;
+        if ($regions_count) {
+          $regions_rows = array();
+          foreach ($sim['regions'] as $region) {
+            $region_row = array();
+            $region_row[] = $region['name'];
+            $region_row[] = $region['internal_port'];
+            $region_row[] = $region['region_uuid'];
+            $regions_rows[] = $region_row;
+          }
+          $sim_row[] = theme('table', array('rows' => $regions_rows, 'header' => $sim_header));
+        }
+        $sim_rows[] = $sim_row;
+      }
+      $row[] = theme('table', array('rows' => $sim_rows, 'header' => $region_header));
+    }
+    $rows[] = $row; 
+  }
+  $form['overview']['values'] = array(
+    '#type' => 'markup',
+    '#markup' => theme('table', array('rows' => $rows, 'header' => $header))
+  );
+  return $form;
+}
+
+function dosm_sysadmin_values_form($form, &$form_state, $values) {
+  $unique_id = drupal_html_id('values-id-');
+
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+
+  $form['values'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Values'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $markup = '';
+  $markup .= '<div class="values">';
+  $markup .= '<dl>';
+  ksort($values);
+  $rows = array();
+  foreach ($values as $k => $value) {
+    if (!is_array($value)) {
+      $row = array(
+        $k,
+        is_bool($value) ? $value ? '<img src="/misc/watchdog-ok.png" title="Yes"/>' : '<img src="/misc/watchdog-error.png" title="No"/>' : $value
+      );
+    }
+    else {
+      $row = array(
+        $k,
+        count($value)
+      );
+    }
+    $rows[] = $row;
+  }
+  $form['values']['content'] = array(
+    '#type' => 'item',
+    '#markup' => theme('table', array('rows' => $rows)),
+    '#prefix' => '<div class="table-responsive">',
+    '#suffix' => '</div>'
+  );
+
+  return $form;
+}
+
+function dosm_sysadmin_iars_form($form, &$form_state, $iars, $sim_users, $params) {
+  $unique_id = drupal_html_id('iars-id-');
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+  //$form['#validated'] = TRUE;
+
+  // fill some vars
+  $form['params'] = array(
+    '#type' => 'value',
+    '#value' => $params
+  );
+
+  // iars
+  $form['iars'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Iars',
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE
+  );
+
+  // select action
+  $form['iars']['iar_op'] = array(
+    '#type' => 'select',
+    '#title' => t('Action'),
+    '#options' => array(
+      'none' => t('Do nothing'),
+      'save' => t('Save'),
+      'load' => t('Load'),
+      'delete' => t('Delete'),
+      'download' => t('Download')
+    ),
+  );
+
+  // download iar
+  $form['iars']['downloads'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Files'),
+    '#collapsible' => FALSE,
+    '#collapsed' => TRUE,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_op"]' => array(
+          array('value' => 'download')
+        )
+      )
+    )
+  );
+  $linklist = array();
+  foreach ($iars as $iar) {
+    $linklist[] = array('title' => $iar['name'], 'href' => 'http://'. $params['url']. ':'. $params['port']. $iar['url']);
+  }
+  $form['iars']['downloads']['download'] = array(
+    '#type' => 'markup',
+    '#markup' => theme(
+      'links', array(
+        'links' => $linklist,
+        'attributes' => array(
+          'class' => array(
+            'links', 'inline'
+          )
+        )
+      )
+    ),
+  );
+
+  // select iar file
+  $files = array(
+    'none' => t('Select a file')
+  );
+  foreach ($iars as $iar) {
+    $files[$iar['path']] = $iar['name'];
+  }
+  $form['iars']['iar_file'] = array(
+    '#type' => 'select',
+    '#title' => t('Iar files'),
+    '#options' => $files,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_op"]' => array(
+          array('value' => 'load'),
+          array('value' => 'delete')
+        )
+      )
+    )
+  );
+
+  // select sim
+  $sims = array(
+    'none' => t('None')
+  );
+  foreach ($sim_users as $sim_user) {
+    foreach($sim_user['sims'] as $sim) {
+      if ($sim['alive']) {
+        $sims[$sim['path']] = $sim['username'] . ' / ' . $sim['name'];
+      }
+    }
+  }
+  $form['iars']['iar_sim_path'] = array(
+    '#type' => 'select',
+    '#title' => t('Sim'),
+    '#options' => $sims,
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="iar_op"]' => array(
+          array('value' => 'none'),
+          array('value' => 'download')
+        ),
+      )
+    )
+  );
+
+  // load options
+  $form['iars']['load_options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Load Options'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_op"]' => array('value' => 'load'),
+        ':input[name="iar_sim_path"]' => array('!value' => 'none'),
+        ':input[name="iar_file"]' => array('!value' => 'none'),
+      ),
+    )
+  );
+  $form['iars']['load_options']['load_opt_merge'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Merge'),
+    '#description' => t("An option which merges the loaded IAR with existing inventory folders where possible, rather than always creating new ones")
+  );
+  $form['iars']['load_options']['load_opt_first'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Firstname'),
+    '#description' => t("The user's first name.")
+  );
+  $form['iars']['load_options']['load_opt_last'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Lastname'),
+    '#description' => t("The user's last name.")
+  );
+  $form['iars']['load_options']['load_opt_password'] = array(
+    '#type' => 'password',
+    '#title' => t('Password'),
+    '#description' => t("The user's password.")
+  );
+  $form['iars']['load_options']['load_opt_inventory_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Inventory path'),
+    '#default_value' => '/',
+    '#description' => t("The path inside the user's inventory where the IAR should be loaded.")
+  );
+  // confirm load
+  $form['iars']['load_options']['iar_confirm_load'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Yes, i want to load this iar.'),
+  );
+  $form['iars']['load_options']['load_opt_confirm_alert'] = array(
+    '#type' => 'item',
+    '#markup' => '<div class="messages warning alert alert-warning">'. t('This action is irreversible.'). '</div>',
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_confirm_load"]' => array('checked' => TRUE)
+      )
+    )
+  );
+  $form['iars']['load_options']['load_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'load-iar-button',
+    '#value' => t('Load'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_iars_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_confirm_load"]' => array('checked' => TRUE)
+      )
+    )
+  );
+
+  // save options
+  $form['iars']['save_options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Save Options'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_op"]' => array('value' => 'save'),
+        ':input[name="iar_sim_path"]' => array('!value' => 'none'),
+      ),
+    )
+  );
+  $form['iars']['save_options']['save_opt_home'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Home'),
+    '#description' => t('Adds the url of the profile service to the saved user information.')
+  );
+  $form['iars']['save_options']['save_opt_noassets'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('No assets'),
+    '#description' => t('Stops assets being saved to the IAR.')
+  );
+  $form['iars']['save_options']['save_opt_first'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Firstname'),
+    '#description' => t("The user's first name.")
+  );
+  $form['iars']['save_options']['save_opt_last'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Lastname'),
+    '#description' => t("The user's last name.")
+  );
+  $form['iars']['save_options']['save_opt_password'] = array(
+    '#type' => 'password',
+    '#title' => t('Password'),
+    '#description' => t("The user's password.")
+  );
+  $form['iars']['save_options']['save_opt_inventory_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Inventory path'),
+    '#default_value' => '/',
+    '#description' => t("The path inside the user's inventory for the folder/item to be saved.")
+  );
+  $form['iars']['save_options']['save_opt_exclude'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Exclude'),
+    '#description' => t("Don't save the inventory item in archive (enter a name or uuid")
+  );
+  $form['iars']['save_options']['save_opt_excludefolder'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Exclude folder'),
+    '#description' => t("Don't save the folder in archive (enter a name or uuid")
+  );
+  // confirm save
+  $form['iars']['save_options']['iar_confirm_save'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Yes, i want to save this iar.'),
+  );
+  $form['iars']['save_options']['save_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'save-iar-button',
+    '#value' => t('Save'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_iars_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_confirm_save"]' => array('checked' => TRUE)
+      )
+    )
+  );
+
+  // delete
+  $form['iars']['delete'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Delete'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_op"]' => array('value' => 'delete'),
+        ':input[name="iar_file"]' => array('!value' => 'none'),
+        ':input[name="iar_sim_path"]' => array('!value' => 'none'),
+      )
+    )
+  );
+  $form['iars']['delete']['iar_confirm_delete'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Yes, i want to delete this iar.'),
+  );
+  $form['iars']['delete']['confirm_alert'] = array(
+    '#type' => 'item',
+    '#markup' => '<div class="messages warning alert alert-warning">'. t('This action is irreversible.'). '</div>',
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_confirm_delete"]' => array('checked' => TRUE)
+      )
+    )
+  );
+  $form['iars']['delete']['delete_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'delete-iar-button',
+    '#value' => t('Delete'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_iars_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="iar_confirm_delete"]' => array('checked' => TRUE)
+      )
+    )
+  );
+  $form['iars']['answer'] = array(
+    '#type' => 'markup',
+    //'#prefix' => '<div id="'. $unique_id.'">',
+    //'#suffix' => '</div>'
+  );
+  return $form;
+}
+
+function dosm_sysadmin_iars_callback($form, $form_state) {
+
+  $params = array(
+    'url' => $form_state['values']['params']['url'],
+    'port' => $form_state['values']['params']['port'],
+    'path' => $form_state['values']['params']['path'],
+    'params' => array(
+      'password' => htmlspecialchars($form_state['values']['params']['params']['password']),
+    )
+  );
+
+  switch($form_state['clicked_button']['#name']) {
+    case 'load-iar-button':
+      // sim path region name iar name
+      $params['params']['sim_path'] = $form_state['values']['iar_sim_path'];
+      $params['params']['iar_path'] = $form_state['values']['iar_file'];
+      $params['params']['params'] = array(
+        'merge' => $form_state['values']['load_opt_merge'],
+        'first' => $form_state['values']['load_opt_first'],
+        'last' => $form_state['values']['load_opt_last'],
+        'password' => $form_state['values']['load_opt_password'],
+        'inventory_path' => $form_state['values']['load_opt_inventory_path'],
+      );
+      $params['method'] = 'os_load_iar';
+      $message = t('Iar loaded');
+      break;
+    case 'save-iar-button':
+      // get save options
+      $params['params']['sim_path'] = $form_state['values']['iar_sim_path'];
+      $params['params']['params'] = array(
+        'home' => $form_state['values']['save_opt_home'],
+        'noassets' => $form_state['values']['save_opt_noassets'],
+        'first' => $form_state['values']['save_opt_first'],
+        'last' => $form_state['values']['save_opt_last'],
+        'password' => $form_state['values']['save_opt_password'],
+        'inventory_path' => $form_state['values']['save_opt_inventory_path'],
+        'exclude' => $form_state['values']['save_opt_exclude'],
+        'excludefolder' => $form_state['values']['save_opt_excludefolder'],
+      );
+      $params['method'] = 'os_save_iar';
+      $message = t('Iar saved');
+      break;
+    case 'delete-iar-button':
+      $params['params']['iar_path'] = $form_state['values']['iar_file'];
+      $params['method'] = 'delete_iar';
+      $message = t('Iar deleted');
+      break;
+    default:
+      return $form;
+  }
+
+  $response = dosm_xmlrpc_call($params);
+  $form['iars']['#collapsed'] = FALSE;
+  if ($response['success']) {
+    if (!$response['data']['success']) {
+      $message = $response['data']['message'];
+    }
+    $form['iars']['answer']['#markup'] = '<div class="success alert alert-success alert-dismissable"><pre>'. $message. '</pre></div>';
+    return $form;
+  }
+  $form['iars']['answer']['#markup'] =  '<div class="messages error alert alert-danger alert-dismissable">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>';
+  return $form;
+}
+
+function dosm_sysadmin_oars_form($form, &$form_state, $oars, $sim_users, $params) {
+  $unique_id = drupal_html_id('oars-id-');
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+  //$form['#validated'] = TRUE;
+
+  // fill some vars
+  $form['params'] = array(
+    '#type' => 'value',
+    '#value' => $params
+  );
+  $form['oars'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Oars',
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE
+  );
+
+  // select action
+  $form['oars']['oar_op'] = array(
+    '#type' => 'select',
+    '#title' => t('Action'),
+    '#options' => array(
+      'none' => t('Do nothing'),
+      'save' => t('Save'),
+      'load' => t('Load'),
+      'delete' => t('Delete'),
+      'download' => t('Download')
+    ),
+  );
+
+  // download oar
+  $form['oars']['downloads'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Files'),
+    '#collapsible' => FALSE,
+    '#collapsed' => TRUE,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_op"]' => array(
+          array('value' => 'download')
+        )
+      )
+    )
+  );
+  $linklist = array();
+  foreach ($oars as $oar) {
+    $linklist[] = array('title' => $oar['name'], 'href' => 'http://'. $params['url']. ':'. $params['port']. $oar['url']);
+  }
+  $form['oars']['downloads']['download'] = array(
+    '#type' => 'markup',
+    '#markup' => theme(
+      'links', array(
+        'links' => $linklist,
+        'attributes' => array(
+          'class' => array(
+            'links', 'inline'
+          )
+        )
+      )
+    ),
+  );
+
+  // select oar file
+  $files = array(
+    'none' => t('Select a file')
+  );
+  foreach ($oars as $oar) {
+    $files[$oar['path']] = $oar['name'];
+  }
+  $form['oars']['oar_file'] = array(
+    '#type' => 'select',
+    '#title' => t('Oar file'),
+    '#options' => $files,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_op"]' => array(
+          array('value' => 'load'),
+          array('value' => 'delete')
+        )
+      )
+    )
+  );
+
+  // select region
+  $regions = array(
+    'none' => t('None')
+  );
+  $region_path = '';
+  foreach ($sim_users as $sim_user) {
+    $region_path .= '/'. $sim_user['name'];
+    foreach($sim_user['sims'] as $sim) {
+      $region_path .= '/'. $sim['name'];
+      $sim_level = $region_path;
+      if (count($sim['regions'])) {
+        foreach($sim['regions'] as $region) {
+          $region_path .= '/'. $region['name'];
+          $regions[$region_path] = $region_path;
+          $region_path = $sim_level;
+        }
+      }
+    }
+  }
+  $form['oars']['oar_region'] = array(
+    '#type' => 'select',
+    '#title' => t('Region'),
+    '#options' => $regions,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_op"]' => array(
+          array('value' => 'load'),
+          array('value' => 'save'),
+        ),
+      )
+    )
+  );
+
+  // load options
+  $form['oars']['load_options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Load Options'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_op"]' => array('value' => 'load'),
+        ':input[name="oar_region"]' => array('!value' => 'none'),
+      ),
+    )
+  );
+  $form['oars']['load_options']['merge'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Merge'),
+    '#description' => t("Will merge the OAR with the existing scene (suppresses terrain and parcel info loading).")
+  );
+  $form['oars']['load_options']['skip_assets'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Skip assets'),
+    '#description' => t("Will load the OAR but ignore the assets it contains.")
+  );
+  $form['oars']['load_options']['displacement'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Displacement'),
+    '#description' => t("Will add this value to the position of every object loaded. (x,y,z)")
+  );
+  $form['oars']['load_options']['force_terrain'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Force terrain'),
+    '#description' => t("Forces the loading of terrain from the oar (undoes suppression done by 'merge').")
+  );
+  $form['oars']['load_options']['force_parcels'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Force parcels'),
+    '#description' => t("Forces the loading of parcels from the oar (undoes suppression done by 'merge').")
+  );
+  $form['oars']['load_options']['rotation'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Rotation'),
+    '#description' => t("Specified rotation to be applied to the oar. Specified in degrees.")
+  );
+  $form['oars']['load_options']['rotation_center'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Rotation center'),
+    '#description' => t("Location (relative to original OAR) to apply rotation. Default is 128,128,0.")
+  );
+  $form['oars']['load_options']['no_objects'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('No objects'),
+    '#description' => t("Suppresses the addition of any objects (good for loading only the terrain).")
+  );
+  $form['oars']['load_options']['oar_confirm_load'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Yes, i want to load this oar.'),
+  );
+  $form['oars']['load_options']['confirm_alert'] = array(
+    '#type' => 'item',
+    '#markup' => '<div class="messages warning alert alert-warning">'. t('This action is irreversible.'). '</div>',
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_confirm_load"]' => array('checked' => TRUE)
+      )
+    )
+  );
+  $form['oars']['load_options']['load_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'load-oar-button',
+    '#value' => t('Load'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_oars_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_confirm_load"]' => array('checked' => TRUE)
+      )
+    )
+  );
+
+  // save options
+  $form['oars']['save_options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Save Options'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_op"]' => array('value' => 'save'),
+        ':input[name="oar_region"]' => array('!value' => 'none'),
+      ),
+    )
+  );
+  $form['oars']['save_options']['home'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Home'),
+    '#description' => t("Adds the url of the profile service to the saved user information.")
+  );
+  $form['oars']['save_options']['noassets'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('No assets'),
+    '#description' => t("Stops assets being saved to the OAR.")
+  );
+  $form['oars']['save_options']['publish'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Publish'),
+    '#description' => t("Saves an OAR stripped of owner and last owner information.<br/>On reload, the estate owner will be the owner of all objects.<br/> This is useful if you're making oars generally available that might be reloaded to the same grid from which you published")
+  );
+  $form['oars']['save_options']['perm'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Perm'),
+    '#options' => array(
+      'C' => 'Copy',
+      'T' => 'Transfer'
+    ),
+    '#description' => t("Stops objects with insufficient permissions from being saved to the OAR.")
+  );
+  $form['oars']['save_options']['all_regions'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('All regions'),
+    '#description' => t("Saves all the regions in the simulator, instead of just the current region.")
+  );
+  $form['oars']['save_options']['oar_confirm_save'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Yes, i want to save this oar.'),
+  );
+  $form['oars']['save_options']['save_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'save-oar-button',
+    '#value' => t('Save'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_oars_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_confirm_save"]' => array('checked' => TRUE)
+      )
+    )
+  );
+
+  // delete
+  $form['oars']['delete'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Delete'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_op"]' => array('value' => 'delete'),
+        ':input[name="oar_file"]' => array('!value' => 'none')
+      )
+    )
+  );
+  $form['oars']['delete']['oar_confirm_delete'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Yes, i want to delete this oar.'),
+  );
+  $form['oars']['delete']['confirm_alert'] = array(
+    '#type' => 'item',
+    '#markup' => '<div class="messages warning alert alert-warning">'. t('This action is irreversible.'). '</div>',
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_confirm_delete"]' => array('checked' => TRUE)
+      )
+    )
+  );
+  $form['oars']['delete']['delete_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'delete-oar-button',
+    '#value' => t('Delete'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_oars_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="oar_confirm_delete"]' => array('checked' => TRUE)
+      )
+    )
+  );
+  $form['oars']['answer'] = array(
+    '#type' => 'markup',
+    //'#prefix' => '<div id="'. $unique_id.'">',
+    //'#suffix' => '</div>'
+  );
+  return $form;
+}
+
+function dosm_sysadmin_oars_form_submit($form, &$form_state) {
+  $form_state['rebuild'] = TRUE;
+}
+
+function dosm_sysadmin_oars_callback($form, $form_state) {
+
+  $params = array(
+    'url' => $form_state['values']['params']['url'],
+    'port' => $form_state['values']['params']['port'],
+    'path' => $form_state['values']['params']['path'],
+    'params' => array(
+      'password' => htmlspecialchars($form_state['values']['params']['params']['password']),
+      //'sim_path' => $form_state['values']['files']
+    )
+  );
+
+  $region = explode('/', $form_state['values']['oar_region']);
+  if (count($region)) {
+    $username = $region[1];
+    $sim_name = $region[2];
+    $region_name = $region[3];
+  }
+
+  switch($form_state['clicked_button']['#name']) {
+    // load
+    case 'load-oar-button':
+      $params['params']['sim_path'] = '/home/'. $username. '/opensimulator/sims/'. $sim_name. '.sim';
+      $params['params']['region_name'] = $region_name;
+      $params['params']['oar_path'] = $form_state['values']['oar_file'];
+      $params['params']['params'] = array(
+        'merge' => $form_state['values']['merge'],
+        'skip_assets' => $form_state['values']['skip_assets'],
+        'displacement' => $form_state['values']['displacement'],
+        'force_terrain' => $form_state['values']['force_terrain'],
+        'force_parcels' => $form_state['values']['force_parcels'],
+        'rotation' => $form_state['values']['rotation'],
+        'rotation_center' => $form_state['values']['rotation_center'],
+        'no_objects' => $form_state['values']['no_objects'],
+      );
+      $params['method'] = 'os_load_oar';
+      $message = t('Oar loaded');
+      break;
+    // save
+    case 'save-oar-button':
+      // get save options
+      $perm = array();
+      if ($form_state['values']['perm']['C']) {
+        $perm[] = 'C';
+      }
+      if ($form_state['values']['perm']['T']) {
+        $perm[] = 'T';
+      }
+      $params['params']['sim_path'] = '/home/'. $username. '/opensimulator/sims/'. $sim_name. '.sim';
+      $params['params']['region_name'] = $region_name;
+      $params['params']['params'] = array(
+        'home' => $form_state['values']['home'],
+        'noassets' => $form_state['values']['noassets'],
+        'publish' => $form_state['values']['publish'],
+        'perm' => implode(',', $perm),
+        'all_regions' => $form_state['values']['all_regions']
+      );
+      $params['method'] = 'os_save_oar';
+      $message = t('Oar saved');
+      break;
+    // delete
+    case 'delete-oar-button':
+      $params['params']['oar_path'] = $form_state['values']['oar_file'];
+      $params['method'] = 'delete_oar';
+      $message = t('Oar deleted');
+      break;
+    // default
+    default:
+      return $form;
+  }
+
+  $response = dosm_xmlrpc_call($params);
+  $form['oars']['#collapsed'] = FALSE;
+  if ($response['success']) {
+    if (!$response['data']['success']) {
+      $message = $response['data']['message'];
+    }
+    $form['oars']['answer']['#markup'] = '<div class="success alert alert-success alert-dismissable"><pre>'. $message. '</pre></div>';
+    return $form;
+  }
+  $form['oars']['answer']['#markup'] =  '<div class="messages error alert alert-danger alert-dismissable">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>';
+  return $form;
+}
+
+function dosm_sysadmin_sim_form($form, &$form_state, $sim, $params) {
+  $unique_id = drupal_html_id('sim-id-');
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+
+  $form['sim'] = array(
+    '#type' => 'fieldset',
+    '#title' => $sim['name'],
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  // show values
+  $sub_form = drupal_get_form('dosm_sysadmin_values_form', $sim);
+  $form['sim']['values'] = array(
+    '#type' => 'item',
+    '#markup' => drupal_render($sub_form)
+  );
+
+  if ($sim['has_opensim_log']) {
+    $sub_form = drupal_get_form('dosm_sysadmin_cmd_show_log_form', $sim, $params);
+    $form['sim']['show_log'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form)
+    );
+  }
+  if ($sim['valid']) {
+    $sub_form = drupal_get_form('dosm_sysadmin_cmd_run_sim_form', $sim, $params);
+    $form['sim']['start_stop'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form)
+    );
+  }
+  if (count($sim['regions'])) {
+    $sub_form = drupal_get_form('dosm_sysadmin_regions_form', $sim['regions'], $params);
+    $form['sim']['regions'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form)
+    );
+  }
+  return $form;
+}
+
+function dosm_sysadmin_cmd_show_log_form($form, &$form_state, $sim, $params) {
+  $unique_id = drupal_html_id('show-log-id-');
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+  
+  // fill some vars
+  $form['params']= array(
+    '#type' => 'value',
+    '#value' => $params
+  );
+  $form['sim_path'] = array(
+    '#type' => 'value',
+    '#value' => $sim['path']
+  );
+  // Logs
+  $form['show_log'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Logs'),
+    '#collapsible' => TRUE,
+    '#collapsed' => False,
+  );
+  if ($sim['has_tmux_log']) {
+    $form['show_log']['log_type'] = array(
+      '#type' => 'radios',
+      '#title' => t('Log type'),
+      '#options' => array(
+        'os' => 'OpenSim',
+        'tx' => 'tmux'
+      ),
+      '#default_value' => 'os'
+    );
+  }
+  else {
+    $form['show_log']['log_type'] = array(
+      '#type' => 'value',
+      '#value' => 'os',
+    );
+  }
+  $form['show_log']['button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'show-log-button',
+    '#value' => t('Refresh'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_cmd_show_log_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+  );
+  $form['show_log']['answer'] = array(
+    '#type' => 'item',
+  );
+  return $form;
+}
+
+function dosm_sysadmin_cmd_show_log_callback($form, $form_state) {
+  if ($form_state['clicked_button']['#name'] == 'show-log-button') {
+    $params = array(
+      'url' => $form_state['values']['params']['url'],
+      'port' => $form_state['values']['params']['port'],
+      'path' => $form_state['values']['params']['path'],
+      'method'=> 'show_log',
+      'params' => array(
+        'password' => htmlspecialchars($form_state['values']['params']['params']['password']),
+        'sim_path' => $form_state['values']['sim_path'],
+        'log_type' => $form_state['values']['log_type']
+      )
+    );
+    $response = dosm_xmlrpc_call($params);
+    $form['show_log']['#collapsed'] = FALSE;
+    if ($response['success']) {
+      $form['show_log']['answer']['#markup'] = '<div class="success"><pre>'. base64_decode($response['data']['log']). '</pre></div>';
+    }
+    else {
+      $form['show_log']['answer']['#markup'] =  '<div class="messages error alert alert-danger">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>';
+    }
+  }
+  return $form;
+}
+
+function dosm_sysadmin_cmd_run_sim_form($form, &$form_state, $sim, $params) {
+  $unique_id = drupal_html_id('run-sim-id-');
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+
+  // fill some vars
+  $form['params']= array(
+    '#type' => 'value',
+    '#value' => $params
+  );
+  $form['sim_path'] = array(
+    '#type' => 'value',
+    '#value' => $sim['path']
+  );
+  $form['buttons'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Start / Stop'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  # show the form
+  $form['buttons']['start'] = array(
+    '#type'  => 'button',
+    '#name'  => 'start-sim-button',
+    '#value' => t('Start sim'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_cmd_run_sim_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+  );
+  $form['buttons']['stop_kill'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Stop / Kill'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['buttons']['stop_kill']['stop'] = array(
+    '#type'  => 'button',
+    '#name'  => 'stop-sim-button',
+    '#value' => t('Stop sim'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_cmd_run_sim_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+  );
+  $form['buttons']['stop_kill']['kill'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Kill'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['buttons']['stop_kill']['kill']['button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'kill-sim-button',
+    '#value' => t('Kill sim'),
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_cmd_run_sim_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+  );
+  
+  $form['buttons']['answer'] = array(
+    '#type' => 'item',
+  );
+  return $form;
+}
+
+function dosm_sysadmin_cmd_run_sim_callback($form, $form_state) {
+  $params = array(
+    'url' => $form_state['values']['params']['url'],
+    'port' => $form_state['values']['params']['port'],
+    'path' => $form_state['values']['params']['path'],
+    'method' => 'run_sim',
+    'params' => array(
+      'password' => htmlspecialchars($form_state['values']['params']['params']['password']),
+      'sim_path' => $form_state['values']['sim_path']
+    )
+  );
+
+  switch($form_state['clicked_button']['#name']) {
+    case 'start-sim-button':
+      $params['params']['action'] = 'start';
+      break;
+    case 'stop-sim-button':
+      $params['params']['action'] = 'stop';
+      break;
+    case 'kill-sim-button':
+      $params['params']['action'] = 'kill';
+      break;
+    default:
+      return $form;
+  }
+
+  $response = dosm_xmlrpc_call($params);
+  $form['buttons']['#collapsed'] =  FALSE;
+  if ($response['success']) {
+    $form['buttons']['answer']['#markup'] = '<div class="success"><pre>'. $response['data']['run_sim']. '</pre></div>';
+  }
+  else {
+    $form['buttons']['answer']['#markup'] =  '<div class="messages error alert alert-danger">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>';
+  }
+  return $form;
+}
+
+function dosm_sysadmin_regions_form($form, &$form_states, $regions, $params) {
+  $unique_id = drupal_html_id('region-id-');
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+
+  $form['regions'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Regions'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE
+  );
+  foreach($regions as $k => $region) {
+    $form['regions'][$k] = array(
+      '#type' => 'fieldset',
+      '#title' => $region['name'],
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE
+    );
+    // show values
+    $sub_form = drupal_get_form('dosm_sysadmin_values_form', $region);
+    $form['regions'][$k]['values'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form)
+    );
+  }
+  return $form;
+}

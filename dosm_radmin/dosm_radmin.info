@@ -1,0 +1,5 @@
+name = OpenSimulator Manager RAdmin
+description = Module for RAdmin command for OpenSimulator Manager
+package = OpenSimulator Manager
+dependencies[] = dosm
+core = 7.x

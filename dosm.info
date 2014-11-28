@@ -1,0 +1,8 @@
+name = OpenSimulator Manager "Nodes"
+description = Module for nodes OpenSimulator Manager
+package = OpenSimulator Manager
+dependencies[] = views
+dependencies[] = uuid_field
+dependencies[] = entityreference
+files[] = views/dosm_views_access_plugin.inc
+core = 7.x

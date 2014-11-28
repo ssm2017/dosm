@@ -1,0 +1,5 @@
+name = OpenSimulator Manager SysAdmin
+description = Module for pyosm commands
+package = OpenSimulator Manager
+dependencies[] = dosm
+core = 7.x

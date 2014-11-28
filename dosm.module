@@ -1,0 +1,97 @@
+<?php
+
+/**
+ * Implements hook_help().
+ */
+function dosm_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#dosm':
+      return t('OpenSim Manager web (DOSM) is an interface that avoids using the server console to start, stop and perform backup scripts.</br>
+        To make this project work, you must have [RemoteAdmin] enabled in your OpenSim.ini file.');
+  }
+}
+
+/**
+ * Implements hook_views_api.
+ */
+function dosm_views_api() {
+  return array(
+    'api' => 3
+  );
+}
+
+/**
+ * Implements hook_views_plugins()
+ */
+function dosm_views_plugins() {
+  $plugins = array(
+    'access' => array(
+      'test' => array(
+        'title' => t('Dosm access check'),
+        'help' => t('This is dosm access plugin'),
+        'handler' => 'dosm_access_plugin',
+        'path' => drupal_get_path('module', 'dosm') . '/views',
+      ),
+    ),
+  );
+  return $plugins;
+}
+
+/**
+ * Callback for views access
+ */
+function dosm_views_access($account = NULL) {
+  global $user;
+  $access = false;
+  $uid = arg(1);
+  if ($user->uid == 1 || $user->uid == $uid) {
+    $access = TRUE;
+  }
+  return $access;
+}
+
+/**
+ * Check if an user is a manager
+ */
+function dosm_is_manager($uid, $node) {
+  $is_manager = FALSE;
+  if (isset($node->field_dosm_managers) && !empty($node->field_dosm_managers)) {
+    foreach($node->field_dosm_managers[LANGUAGE_NONE] as $manager) {
+      if ($manager['target_id'] == $uid) {
+        return TRUE;
+      }
+    }
+  }
+}
+
+function dosm_xmlrpc_call($params) {
+  $return = array();
+  $server = url('http://'. $params['url']. ':'. $params['port']. $params['path'], array('external' => TRUE));
+  $options = array(
+    $params['method'] => $params['params'],
+  );
+  // Make the xmlrpc request and process the results.
+  $result = xmlrpc($server, $options);
+  if (is_array($result) && !count($result)) {
+    return array(
+      'success' => FALSE,
+      'message' => t('No answer'),
+      'data' => NULL
+    );
+  }
+  if ($result === FALSE) {
+    return array(
+      'success' => FALSE,
+      'message' => t('Error: @errno, Message: @message',
+      array('@errno' => xmlrpc_errno(), '@message' => xmlrpc_error_msg())),
+      'data' => NULL
+    );
+  }
+  else {
+    return array(
+      'success' => TRUE,
+      'message' => '',
+      'data' => $result
+    );
+  }
+}

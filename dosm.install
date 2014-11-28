@@ -1,0 +1,612 @@
+
+<?php
+
+/**
+ * @file
+ * Install, update, and uninstall functions for the node_dosm module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function dosm_install() {
+  $node_types = _dosm_get_node_types();
+
+  foreach ($node_types as $machine_name => $texts) {
+    // define the node type
+    $defaults = array(
+      'type' => $machine_name,
+      'name' => $texts['name'],
+      'base' => 'node_content',
+      'title_label' => $texts['title_label'],
+      'description' => $texts['description'],
+      'custom' => TRUE,
+    );
+
+    // set other node defaults not declared above
+    $content_type = node_type_set_defaults($defaults);
+
+    // add the body field
+    node_add_body_field($content_type, $texts['body_label']);
+
+    // save the content type
+    node_type_save($content_type);
+
+    // add peristant variables that control settings
+    variable_set('additional_settings__active_tab_' . $machine_name, 'edit-menu');
+    variable_set('node_preview_' . $machine_name, 1);
+    variable_set('node_options_' . $machine_name, array(0 => 'status'));
+    variable_set('node_submitted_' . $machine_name, 0);
+    variable_set('menu_options_' . $machine_name, array());
+    variable_set('menu_parent_' . $machine_name, 'main-menu:0');
+    variable_set('comment_' . $machine_name, 'COMMENT_NODE_HIDDEN');
+
+    // create all the fields we are adding to our content type
+    foreach (_dosm_installed_fields($machine_name) as $field) {
+      field_create_field($field);
+    }
+
+    // create all the instances for our fields
+    foreach (_dosm_installed_instances($machine_name) as $instance) {
+      $instance['entity_type'] = 'node';
+      $instance['bundle'] = $defaults['type'];
+      field_create_instance($instance);
+    }
+  }
+}
+
+/**
+ * Define the node types values
+ */
+function _dosm_get_node_types() {
+  $t = get_t();
+  return array(
+    'dosm_machine' => array(
+      'name' => $t('DOSM Machine'),
+      'title_label' => $t('Name'),
+      'body_label' => $t('Description'),
+      'description' => $t('Node physical machine that hosts the simulator.')
+    ),
+    'dosm_user' => array(
+      'name' => $t('DOSM User'),
+      'title_label' => $t('Name'),
+      'body_label' => $t('Description'),
+      'description' => $t('Link between machine users and website users.')
+    ),
+    'dosm_simulator' => array(
+      'name' => $t('DOSM Simulator'),
+      'title_label' => $t('Name'),
+      'body_label' => $t('Description'),
+      'description' => $t('Node simulator OpenSimulator.')
+    ),
+  );
+}
+
+/**
+ * Define the fields for our content type.
+ */
+function _dosm_installed_fields($node_type) {
+  switch ($node_type) {
+    case 'dosm_machine':
+      return array(
+        // Machine url
+        'dosm_machine_url' => array(
+          'field_name' => 'field_dosm_machine_url',
+          'type' => 'text',
+          'module' => 'text',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'max_length' => 255
+          )
+        ),
+        // Machine port
+        'dosm_machine_port' => array(
+          'field_name' => 'field_dosm_machine_port',
+          'type' => 'number_integer',
+          'module' => 'number',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+        ),
+        // Machine path
+        'dosm_machine_path' => array(
+          'field_name' => 'field_dosm_machine_path',
+          'type' => 'text',
+          'module' => 'text',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'max_length' => 255
+          )
+        ),
+        // Machine password
+        'dosm_machine_password' => array(
+          'field_name' => 'field_dosm_machine_password',
+          'type' => 'text',
+          'module' => 'text',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'max_length' => 255
+          )
+        ),
+        // Managers
+        'dosm_managers' => array(
+          'field_name' => 'field_dosm_managers',
+          'type' => 'entityreference',
+          'module' => 'entityreference',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => -1,
+          'deleted' => 0,
+          'settings' => array(
+            'target_type' => 'user',
+            'handler' => 'base',
+          ),
+        ),
+      );
+      break;
+    case 'dosm_user':
+      return array(
+        // Machine
+        'dosm_machine' => array(
+          'field_name' => 'field_dosm_machine',
+          'type' => 'entityreference',
+          'module' => 'entityreference',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'target_type' => 'node',
+            'handler' => 'base',
+            'handler_settings' => array(
+              'target_bundles' => array(
+                'dosm_machine' => 'dosm_machine'
+              )
+            )
+          )
+        ),
+        // Website username
+        'dosm_user_uid' => array(
+          'field_name' => 'field_dosm_user_uid',
+          'type' => 'entityreference',
+          'module' => 'entityreference',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'target_type' => 'user',
+            'handler' => 'base',
+          )
+        ),
+        // Machine username
+        'dosm_user_username' => array(
+          'field_name' => 'field_dosm_user_username',
+          'type' => 'text',
+          'module' => 'text',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'max_length' => 255
+          )
+        ),
+      );
+      break;
+    case 'dosm_simulator':
+      return array(
+        // sim path
+        'dosm_sim_path' => array(
+          'field_name' => 'field_dosm_sim_path',
+          'type' => 'text',
+          'module' => 'text',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'max_length' => 255
+          )
+        ),
+        // RAdmin port
+        'dosm_sim_radmin_port' => array(
+          'field_name' => 'field_dosm_sim_radmin_port',
+          'type' => 'number_integer',
+          'module' => 'number',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+        ),
+        // RAdmin password
+        'dosm_sim_radmin_password' => array(
+          'field_name' => 'field_dosm_sim_radmin_password',
+          'type' => 'text',
+          'module' => 'text',
+          'active' => 1,
+          'locked' => 1,
+          'cardinality' => 1,
+          'deleted' => 0,
+          'settings' => array(
+            'max_length' => 50
+          )
+        ),
+      );
+      break;
+  }
+}
+
+/**
+ * Define the field instances for our content type.
+ */
+function _dosm_installed_instances($node_type) {
+  switch ($node_type) {
+    case 'dosm_machine':
+      return array(
+        // Machine url
+        'dosm_machine_url' => array(
+          'field_name' => 'field_dosm_machine_url',
+          'label' => t('Machine URL'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'text_textfield',
+            'module' => 'text',
+            'settings' => array(
+              'size' => 60,
+              'max_length' => 255
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'hidden',
+            ),
+          ),
+        ),
+        // Machine port
+        'dosm_machine_port' => array(
+          'field_name' => 'field_dosm_machine_port',
+          'label' => t('Machine port'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'number',
+            'module' => 'number',
+            'settings' => array(
+              'size' => 5,
+              'max_length' => 5
+            )
+          ),
+          'settings' => array(
+            'min' => 1,
+            'max' => 65535
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'default',
+            ),
+          ),
+        ),
+        // Machine path
+        'dosm_machine_path' => array(
+          'field_name' => 'field_dosm_machine_path',
+          'label' => t('Machine path'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'text_textfield',
+            'module' => 'text',
+            'settings' => array(
+              'size' => 60,
+              'max_length' => 255
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'hidden',
+            ),
+          ),
+        ),
+        // Machine password
+        'dosm_machine_password' => array(
+          'field_name' => 'field_dosm_machine_password',
+          'label' => t('Machine password'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'text_textfield',
+            'module' => 'text',
+            'settings' => array(
+              'size' => 60,
+              'max_length' => 255
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'hidden',
+            ),
+          ),
+        ),
+        // Managers
+        'dosm_managers' => array(
+          'field_name' => 'field_dosm_managers',
+          'label' => t('Machine managers'),
+          'required' => FALSE,
+          'widget' => array(
+            'type' => 'entityreference_autocomplete',
+            'module' => 'entityreference',
+            'settings' => array(
+              'match_operator' => 'CONTAINS',
+              'size' => 60,
+              'path' => ''
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'entityreference_label',
+              'module' => 'entityreference',
+              'settings' => array(
+                'link' => TRUE
+              )
+            )
+          )
+        ),
+      );
+      break;
+    case 'dosm_user':
+      return array(
+        // Machine
+        'dosm_machine' => array(
+          'field_name' => 'field_dosm_machine',
+          'label' => t('Machine'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'entityreference_autocomplete',
+            'module' => 'entityreference',
+            'settings' => array(
+              'match_operator' => 'CONTAINS',
+              'size' => 60,
+              'path' => ''
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'entityreference_label',
+              'module' => 'entityreference',
+              'settings' => array(
+                'link' => TRUE
+              )
+            )
+          )
+        ),
+        // Machine username
+        'dosm_user_username' => array(
+          'field_name' => 'field_dosm_user_username',
+          'label' => t('Machine username'),
+          'description' => t('The username on the machine.'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'text_textfield',
+            'module' => 'text',
+            'settings' => array(
+              'size' => 60,
+              'max_length' => 255
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'default',
+            ),
+          ),
+        ),
+        // Website user
+        'dosm_user_uid' => array(
+          'field_name' => 'field_dosm_user_uid',
+          'label' => t('Website user'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'entityreference_autocomplete',
+            'module' => 'entityreference',
+            'settings' => array(
+              'match_operator' => 'CONTAINS',
+              'size' => 60,
+              'path' => ''
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'entityreference_label',
+              'module' => 'entityreference',
+              'settings' => array(
+                'link' => TRUE
+              )
+            )
+          )
+        ),
+      );
+      break;
+    case 'dosm_simulator':
+      return array(
+        // Machine
+        'dosm_machine' => array(
+          'field_name' => 'field_dosm_machine',
+          'label' => t('Machine'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'entityreference_autocomplete',
+            'module' => 'entityreference',
+            'settings' => array(
+              'match_operator' => 'CONTAINS',
+              'size' => 60,
+              'path' => ''
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'entityreference_label',
+              'module' => 'entityreference',
+              'settings' => array(
+                'link' => TRUE
+              )
+            )
+          )
+        ),
+        // sim path
+        'dosm_sim_path' => array(
+          'field_name' => 'field_dosm_sim_path',
+          'label' => t('Sim path'),
+          'description' => t('The path where the simulator files are located.'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'text_textfield',
+            'module' => 'text',
+            'settings' => array(
+              'size' => 60,
+              'max_length' => 255
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'hidden',
+            ),
+          ),
+        ),
+        // RAdmin port
+        'dosm_sim_radmin_port' => array(
+          'field_name' => 'field_dosm_sim_radmin_port',
+          'label' => t('RAdmin port'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'number',
+            'module' => 'number',
+            'settings' => array(
+              'size' => 5,
+              'max_length' => 5
+            )
+          ),
+          'settings' => array(
+            'min' => 1,
+            'max' => 65535
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'default',
+            ),
+          ),
+        ),
+        // RAdmin password
+        'dosm_sim_radmin_password' => array(
+          'field_name' => 'field_dosm_sim_radmin_password',
+          'label' => t('RAdmin password'),
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'text_textfield',
+            'module' => 'text',
+            'settings' => array(
+              'size' => 60,
+              'max_length' => 255
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'hidden',
+            ),
+          ),
+        ),
+        // Managers
+        'dosm_managers' => array(
+          'field_name' => 'field_dosm_managers',
+          'label' => t('Simulator managers'),
+          'required' => FALSE,
+          'widget' => array(
+            'type' => 'entityreference_autocomplete',
+            'module' => 'entityreference',
+            'settings' => array(
+              'match_operator' => 'CONTAINS',
+              'size' => 60,
+              'path' => ''
+            )
+          ),
+          'display' => array(
+            'default' => array(
+              'label' => 'inline',
+              'type' => 'entityreference_label',
+              'module' => 'entityreference',
+              'settings' => array(
+                'link' => TRUE
+              )
+            )
+          )
+        ),
+      );
+      break;
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function dosm_uninstall() {
+  $node_types = _dosm_get_node_types();
+
+  foreach ($node_types as $machine_name => $texts) {
+    // gather all nodes created
+    $sql = 'SELECT nid FROM {node} n WHERE n.type = :type';
+    $result = db_query($sql, array(':type' => $machine_name));
+    $nids = array();
+    foreach ($result as $row) {
+      $nids[] = $row->nid;
+    }
+
+    // delete all the nodes at once
+    node_delete_multiple($nids);
+
+    // remove peristant variables that control settings
+    variable_del('additional_settings__active_tab_' . $machine_name);
+    variable_del('node_preview_' . $machine_name);
+    variable_del('node_options_' . $machine_name);
+    variable_del('node_submitted_' . $machine_name);
+    variable_del('menu_options_' . $machine_name);
+    variable_del('menu_parent_' . $machine_name);
+
+
+    // find all fields and delete them
+    foreach (array_keys(_dosm_installed_fields($machine_name)) as $field) {
+      field_delete_field($field);
+    }
+
+    // find all fields and delete instance
+    $instances = field_info_instances('node', $machine_name);
+    foreach ($instances as $instance_name => $instance) {
+      field_delete_instance($instance);
+    }
+
+    // delete our content type
+    node_type_delete($machine_name);
+  }
+
+  // purge all field information
+  field_purge_batch(1000);
+
+  // Remove variables.
+  db_query("DELETE FROM {variable} WHERE name LIKE 'dosm%%'");
+}
