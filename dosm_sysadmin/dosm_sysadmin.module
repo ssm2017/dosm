@@ -445,7 +445,7 @@ function dosm_sysadmin_iars_form($form, &$form_state, $iars, $sim_users, $params
   foreach ($sim_users as $sim_user) {
     foreach($sim_user['sims'] as $sim) {
       if ($sim['alive']) {
-        $sims[$sim['path']] = $sim['username'] . ' / ' . $sim['name'];
+        $sims[$sim['path']] = $sim['username'] . '/' . $sim['name'];
       }
     }
   }
@@ -810,14 +810,18 @@ function dosm_sysadmin_oars_form($form, &$form_state, $oars, $sim_users, $params
   $region_path = '';
   foreach ($sim_users as $sim_user) {
     $region_path .= '/'. $sim_user['name'];
+    $user_level = $region_path;
     foreach($sim_user['sims'] as $sim) {
-      $region_path .= '/'. $sim['name'];
-      $sim_level = $region_path;
-      if (count($sim['regions'])) {
-        foreach($sim['regions'] as $region) {
-          $region_path .= '/'. $region['name'];
-          $regions[$region_path] = $region_path;
-          $region_path = $sim_level;
+      if ($sim['alive']) {
+        $region_path .= '/'. $sim['name'];
+        $sim_level = $region_path;
+        if (count($sim['regions'])) {
+          foreach($sim['regions'] as $region) {
+            $region_path .= '/'. $region['name'];
+            $regions[$region_path] = $region_path;
+            $region_path = $sim_level;
+          }
+          $region_path = $user_level;
         }
       }
     }
