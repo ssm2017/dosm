@@ -54,14 +54,12 @@ function dosm_sysadmin_display_machine_status(&$node) {
   if (!$response['success']) {
     $node->content['dosm_sysadmin_server_status'] = array(
       '#type' => 'item',
-      '#title' => t('Server status'),
       '#markup' => '<div class="messages error alert alert-danger">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>'
     );
     return FALSE;
   }
   $node->content['dosm_sysadmin_server_status'] = array(
     '#type' => 'item',
-    '#title' => t('Server status'),
     '#weight' => -99,
     '#markup' => '<div class="messages status alert alert-success">'. t('The machine remote is online'). '</div>'
   );
@@ -380,7 +378,7 @@ function dosm_sysadmin_iars_form($form, &$form_state, $iars, $sim_users, $params
       'none' => t('Do nothing'),
       'save' => t('Save'),
       'load' => t('Load'),
-      'delete' => t('Delete'),
+      //'delete' => t('Delete'),
       'download' => t('Download')
     ),
   );
@@ -745,7 +743,7 @@ function dosm_sysadmin_oars_form($form, &$form_state, $oars, $sim_users, $params
       'none' => t('Do nothing'),
       'save' => t('Save'),
       'load' => t('Load'),
-      'delete' => t('Delete'),
+      //'delete' => t('Delete'),
       'download' => t('Download')
     ),
   );
@@ -773,11 +771,11 @@ function dosm_sysadmin_oars_form($form, &$form_state, $oars, $sim_users, $params
     '#markup' => theme(
       'links', array(
         'links' => $linklist,
-        'attributes' => array(
+        /*'attributes' => array(
           'class' => array(
             'links', 'inline'
           )
-        )
+        )*/
       )
     ),
   );
@@ -1154,6 +1152,20 @@ function dosm_sysadmin_sim_form($form, &$form_state, $sim, $params) {
       '#markup' => drupal_render($sub_form)
     );
   }
+  // show radmin console
+  if (module_exists('dosm_radmin') && isset($sim['radmin_ready']) && $sim['radmin_ready']) {
+    $config = array(
+      'url' => $params['url'],
+      'port' => $sim['radmin_port'],
+      'password' => $sim['radmin_password'],
+    );
+    $sub_form = drupal_get_form('dosm_radmin_console_command_form', $config);
+    $form['sim']['radmin'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form)
+    );
+  }
+
   return $form;
 }
 
