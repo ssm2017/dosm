@@ -175,20 +175,6 @@ function _dosm_installed_fields($node_type) {
             )
           )
         ),
-        // Website username
-        'dosm_user_uid' => array(
-          'field_name' => 'field_dosm_user_uid',
-          'type' => 'entityreference',
-          'module' => 'entityreference',
-          'active' => 1,
-          'locked' => 1,
-          'cardinality' => 1,
-          'deleted' => 0,
-          'settings' => array(
-            'target_type' => 'user',
-            'handler' => 'base',
-          )
-        ),
         // Machine username
         'dosm_user_username' => array(
           'field_name' => 'field_dosm_user_username',
@@ -413,11 +399,11 @@ function _dosm_installed_instances($node_type) {
             ),
           ),
         ),
-        // Website user
-        'dosm_user_uid' => array(
-          'field_name' => 'field_dosm_user_uid',
-          'label' => t('Website user'),
-          'required' => TRUE,
+        // Managers
+        'dosm_managers' => array(
+          'field_name' => 'field_dosm_managers',
+          'label' => t('Simulator managers'),
+          'required' => FALSE,
           'widget' => array(
             'type' => 'entityreference_autocomplete',
             'module' => 'entityreference',
@@ -609,4 +595,36 @@ function dosm_uninstall() {
 
   // Remove variables.
   db_query("DELETE FROM {variable} WHERE name LIKE 'dosm%%'");
+}
+
+function dosm_update_7000(&$sandbox) {
+  field_delete_field('field_dosm_user_uid');
+  $instance = array(
+    // Managers
+    'field_name' => 'field_dosm_managers',
+    'label' => t('Users managers'),
+    'required' => FALSE,
+    'widget' => array(
+      'type' => 'entityreference_autocomplete',
+      'module' => 'entityreference',
+      'settings' => array(
+        'match_operator' => 'CONTAINS',
+        'size' => 60,
+        'path' => ''
+      )
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'inline',
+        'type' => 'entityreference_label',
+        'module' => 'entityreference',
+        'settings' => array(
+          'link' => TRUE
+        )
+      )
+    )
+  );
+  $instance['entity_type'] = 'node';
+  $instance['bundle'] = 'dosm_user';
+  field_create_instance($instance);
 }

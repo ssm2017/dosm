@@ -1,5 +1,4 @@
 <?php
-
 $view = new view();
 $view->name = 'dosm_user_users';
 $view->description = '';
@@ -48,16 +47,16 @@ $handler->display->display_options['fields']['title_1']['label'] = 'Machine';
 $handler->display->display_options['sorts']['title']['id'] = 'title';
 $handler->display->display_options['sorts']['title']['table'] = 'node';
 $handler->display->display_options['sorts']['title']['field'] = 'title';
-/* Contextual filter: Content: Website user (field_dosm_user_uid) */
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['id'] = 'field_dosm_user_uid_target_id';
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['table'] = 'field_data_field_dosm_user_uid';
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['field'] = 'field_dosm_user_uid_target_id';
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['default_action'] = 'default';
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['default_argument_type'] = 'user';
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['default_argument_options']['user'] = FALSE;
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['summary']['number_of_records'] = '0';
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['summary']['format'] = 'default_summary';
-$handler->display->display_options['arguments']['field_dosm_user_uid_target_id']['summary_options']['items_per_page'] = '25';
+/* Contextual filter: Content: Simulator managers (field_dosm_managers) */
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['id'] = 'field_dosm_managers_target_id';
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['table'] = 'field_data_field_dosm_managers';
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['field'] = 'field_dosm_managers_target_id';
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['default_action'] = 'default';
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['default_argument_type'] = 'user';
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['default_argument_options']['user'] = FALSE;
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['summary']['number_of_records'] = '0';
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['summary']['format'] = 'default_summary';
+$handler->display->display_options['arguments']['field_dosm_managers_target_id']['summary_options']['items_per_page'] = '25';
 /* Filter criterion: Content: Published */
 $handler->display->display_options['filters']['status']['id'] = 'status';
 $handler->display->display_options['filters']['status']['table'] = 'node';
@@ -81,3 +80,4 @@ $handler->display->display_options['menu']['title'] = 'Users';
 $handler->display->display_options['menu']['weight'] = '1';
 $handler->display->display_options['menu']['context'] = 0;
 $handler->display->display_options['menu']['context_only_inline'] = 0;
+

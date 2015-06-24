@@ -10,6 +10,9 @@ function dosm_sysadmin_node_view($node, $view_mode, $langcode) {
       $form_name = $node->type == 'dosm_user' ? 'dosm_sysadmin_user_form' : 'dosm_sysadmin_machine_form';
       $node->content['dosm_sysadmin_users_list'] = drupal_get_form($form_name, $node);
     }
+    else {
+      drupal_goto();
+    }
   }
 }
 
@@ -17,11 +20,6 @@ function dosm_sysadmin_can_see_machine_form($node, $account=null) {
   global $user;
   if (dosm_is_manager($user->uid, $node) || $user->uid == 1) {
     return TRUE;
-  }
-  if ($node->type == 'dosm_user') {
-    if ($node->field_dosm_user_uid[LANGUAGE_NONE][0]['target_id'] == $user->uid) {
-      return TRUE;
-    }
   }
   return FALSE;
 }
