@@ -1,85 +1,35 @@
 <?php
 
-/**
- * Implements hook_node_view.
- */
-function dosm_radmin_node_view($node, $view_mode, $langcode) {
-  if ($node->type == 'dosm_simulator') {
-    if (dosm_radmin_can_see_simulator_form($node)) {
-      $machine = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity'];
-      $config = array(
-        'url' => $machine->field_dosm_machine_url[LANGUAGE_NONE][0]['value'],
-        'port' => $node->field_dosm_sim_radmin_port[LANGUAGE_NONE][0]['value'],
-        'password' => $node->field_dosm_sim_radmin_password[LANGUAGE_NONE][0]['value'],
-      );
+function dosm_radmin_radmin_content($params) {
+  $output = array();
 
-      $node->content['dosm_radmin_machine'] = drupal_get_form('dosm_radmin_simulator_form', $node);
-      //$node->content['dosm_radmin_commands'] = drupal_get_form('dosm_radmin_radmin_form', $node);
-      $node->content['dosm_radmin_radmin'] = drupal_get_form('dosm_radmin_console_command_form', $config);
-    }
-  }
-}
-
-function dosm_radmin_can_see_simulator_form($node, $account=null) {
-  global $user;
-  if (dosm_is_manager($user->uid, $node) || $user->uid == 1) {
-    return TRUE;
-  }
-  return FALSE;
-}
-
-function dosm_radmin_simulator_form($form, &$form_state, $node) {
-  $machine = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity'];
-  $url = $machine->field_dosm_machine_url[LANGUAGE_NONE][0]['value'];
-  $port = $machine->field_dosm_machine_port[LANGUAGE_NONE][0]['value'];
-  $path = $machine->field_dosm_machine_path[LANGUAGE_NONE][0]['value'];
-  $params = array(
-    'url' => $url,
-    'port' => $port,
-    'path' => $path,
-    'method' => 'get_sim',
-    'params' => array(
-      'password' => $machine->field_dosm_machine_password[LANGUAGE_NONE][0]['value'],
-      'sim_path' => $node->field_dosm_sim_path[LANGUAGE_NONE][0]['value'],
-    )
-  );
-  $response = dosm_xmlrpc_call($params);
-
-  if ($response['success'] && $response['data']['success']) {
-    $sim = $response['data']['sim'];
-    $params['sim'] = $sim;
-    $params['sim_user_id'] = 0;
-    $params['sim_id'] = 0;
-    $sub_form = drupal_get_form('dosm_sysadmin_sim_form', $sim, $params);
-    $form['sim'] = array(
-      '#type' => 'item',
-      '#markup' => drupal_render($sub_form)
-    );
-  }
-  return $form;
-}
-
-function dosm_radmin_radmin_form($form, &$form_state, $node) {
-  $form['radmin'] = array(
+  // console
+  $output['console_command'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Internal'),
+    '#title' => t('Console command'),
     '#collapsible' => TRUE,
     '#collapsed' => FALSE,
   );
-  // build the config
-  $machine = $node->field_dosm_machine[LANGUAGE_NONE][0]['entity'];
-  $params = array(
-    'url' => $machine->field_dosm_machine_url[LANGUAGE_NONE][0]['value'],
-    'port' => $node->field_dosm_sim_radmin_port[LANGUAGE_NONE][0]['value'],
-    'password' => $node->field_dosm_sim_radmin_password[LANGUAGE_NONE][0]['value'],
-  );
   $sub_form = drupal_get_form('dosm_radmin_console_command_form', $params);
-  $form['radmin']['console_command'] = array(
+  $output['console_command']['content'] = array(
     '#type' => 'item',
-    '#title' => "aaa",
     '#markup' => drupal_render($sub_form),
   );
-  return $form;
+
+  // presets
+  $output['presets'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('presets commands'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  $sub_form = drupal_get_form('dosm_radmin_presets_command_form', $params);
+  $output['presets']['content'] = array(
+    '#type' => 'item',
+    '#markup' => drupal_render($sub_form),
+  );
+
+  return $output;
 }
 
 function dosm_radmin_console_command_form($form, &$form_state, $params) {
@@ -104,12 +54,13 @@ function dosm_radmin_console_command_form($form, &$form_state, $params) {
   $form['console_command']['command'] = array(
     '#type' => 'textfield',
     '#title' => t('Console command'),
-    '#default_value' => ''
+    '#default_value' => '',
+    '#description' => t('Send any OpenSimulator command to the simulator. example : "fcache clear" or "fcache assets" or "alert mytext"')
   );
   $form['console_command']['button'] = array(
     '#type'  => 'button',
     '#name'  => 'console-command-button',
-    '#value' => t('Send any command to the simulator'),
+    '#value' => t('Send command'),
     '#ajax'  => array(
       'callback' => 'dosm_radmin_send_command_callback',
       'wrapper'  => $unique_id,
@@ -124,7 +75,51 @@ function dosm_radmin_console_command_form($form, &$form_state, $params) {
   return $form;
 }
 
+function dosm_radmin_presets_command_form($form, &$form_state, $params) {
+  $unique_id = drupal_html_id('radmin-presets-command-id-');
+  $form['#prefix'] = '<div id="'. $unique_id. '">';
+  $form['#suffix'] = '</div>';
+
+  // params
+  $form['params'] = array(
+    '#type' => 'value',
+    '#value' => $params
+  );
+
+  // fcache clear
+  $form['fcache_clear_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'fcache-clear-button',
+    '#value' => t('Clear simulator cache'),
+    '#ajax'  => array(
+      'callback' => 'dosm_radmin_send_command_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+  );
+
+  // fcache assets
+  $form['fcache_assets_button'] = array(
+    '#type'  => 'button',
+    '#name'  => 'fcache-assets-button',
+    '#value' => t('Preload assets in cache'),
+    '#ajax'  => array(
+      'callback' => 'dosm_radmin_send_command_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+  );
+
+  $form['answer'] = array(
+    '#type' => 'item',
+  );
+  return $form;
+}
+
 function dosm_radmin_send_command_callback($form, &$form_state) {
+  //return $form_state['clicked_button']['#name'];
   $params = array(
     'url' => $form_state['values']['params']['url'],
     'port' => $form_state['values']['params']['port'],
@@ -136,22 +131,37 @@ function dosm_radmin_send_command_callback($form, &$form_state) {
     )
   );
   switch ($form_state['clicked_button']['#name']) {
-  // console command
-  case 'console-command-button':
-    if ($form_state['values']['console_command']['command'] == "") {
-      $form['console_command']['answer']['#markup'] = t('Please, enter a command to send.');
-      return $form;
-    }
-    $params['method'] = 'admin_console_command';
-    $params['params']['struct']['command'] = $form_state['values']['console_command']['command'];
-    break;
+    // console command
+    case 'console-command-button':
+      if ($form_state['values']['console_command']['command'] == "") {
+        $form['answer']['#markup'] = t('Please, enter a command to send.');
+        return $form;
+      }
+      $params['method'] = 'admin_console_command';
+      $params['params']['struct']['command'] = $form_state['values']['console_command']['command'];
+      break;
+    // fcache clear
+    case 'fcache-clear-button':
+      $params['method'] = 'admin_console_command';
+      $params['params']['struct']['command'] = 'fcache clear';
+      break;
+    // fcache assets
+    case 'fcache-assets-button':
+      $params['method'] = 'admin_console_command';
+      $params['params']['struct']['command'] = 'fcache assets';
+      break;
   }
   $response = dosm_xmlrpc_call($params);
   if ($response['success']) {
-    $form['console_command']['answer']['#markup'] = '<div class="success"><pre>'. print_r($response, true). '</pre></div>';
+    $form['answer']['#markup'] = '<div class="messages status success"><pre>'. print_r($response, true). '</pre></div>';
   }
   else {
-    $form['console_command']['answer']['#markup'] =  '<div class="messages error">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>';
+    if ($response['message'] == 'No answer') {
+      $form['answer']['#markup'] =  '<div class="messages warning">'. t('The command was sent but the simulator returned no answer'). '</div>';
+    }
+    else {
+      $form['answer']['#markup'] =  '<div class="messages error">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>';
+    }
   }
   return $form;
 }
