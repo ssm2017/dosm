@@ -325,23 +325,22 @@ function dosm_sysadmin_simulator_page($node) {
 
 function dosm_sysadmin_sim_users_content($sim_users, $params) {
   $output = array();
+  $output['sim_users'] = array(
+    '#type' => 'horizontal_tabs',
+    '#tree' => TRUE,
+    '#prefix' => '<div id="sim-users-form">',
+    '#suffix' => '</div>',
+  );
   foreach ($sim_users as $sim_user_id => $sim_user) {
 
     $output['sim_users'][$sim_user_id] = array(
-      '#type' => 'horizontal_tabs',
-      '#tree' => TRUE,
-      '#prefix' => '<div id="sim-user-'.$sim_user_id.'-form">',
-      '#suffix' => '</div>',
-    );
-
-    $output['sim_users'][$sim_user_id]['content'] = array(
       '#type' => 'fieldset',
       '#title' => $sim_user['name'],
       '#tree' => TRUE,
       '#parents' => array('sim_users', $sim_user_id)
     );
 
-    $output['sim_users'][$sim_user_id]['content']['tabs'] = array(
+    $output['sim_users'][$sim_user_id]['content'] = array(
       '#type' => 'horizontal_tabs',
       '#tree' => TRUE,
       '#prefix' => '<div id="sim-user-'.$sim_user_id.'-tabs-form">',
@@ -349,62 +348,62 @@ function dosm_sysadmin_sim_users_content($sim_users, $params) {
     );
 
     // show values
-    $output['sim_users'][$sim_user_id]['content']['tabs']['values'] = array(
+    $output['sim_users'][$sim_user_id]['content']['values'] = array(
       '#type' => 'fieldset',
       '#title' => t('Values'),
       '#tree' => TRUE,
-      '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs')
+      '#parents' => array('sim_users', $sim_user_id, 'content')
     );
     $sub_content = dosm_sysadmin_values_content($sim_user);
-    $output['sim_users'][$sim_user_id]['content']['tabs']['values']['content'] = array(
+    $output['sim_users'][$sim_user_id]['content']['values']['content'] = array(
       '#type' => 'item',
       '#markup' => drupal_render($sub_content),
       '#tree' => TRUE,
-      '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs', 'values')
+      '#parents' => array('sim_users', $sim_user_id, 'content', 'values')
     );
 
     // show oars
     if ($sim_user['has_oar_folder']) {
-      $output['sim_users'][$sim_user_id]['content']['tabs']['oar'] = array(
+      $output['sim_users'][$sim_user_id]['content']['oar'] = array(
         '#type' => 'fieldset',
         '#title' => t('Oar'),
         '#tree' => TRUE,
-        '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs')
+        '#parents' => array('sim_users', $sim_user_id, 'content')
       );
       $sub_form = drupal_get_form('dosm_sysadmin_oars_form', $sim_user['oars'], $sim_users, $params);
-      $output['sim_users'][$sim_user_id]['content']['tabs']['oar']['content'] = array(
+      $output['sim_users'][$sim_user_id]['content']['oar']['content'] = array(
         '#type' => 'item',
         '#markup' => drupal_render($sub_form),
         '#tree' => TRUE,
-        '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs', 'oar')
+        '#parents' => array('sim_users', $sim_user_id, 'content', 'oar')
       );
     }
 
     // show iars
     if ($sim_user['has_iar_folder']) {
-      $output['sim_users'][$sim_user_id]['content']['tabs']['iar'] = array(
+      $output['sim_users'][$sim_user_id]['content']['iar'] = array(
         '#type' => 'fieldset',
         '#title' => t('Iar'),
         '#tree' => TRUE,
-        '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs')
+        '#parents' => array('sim_users', $sim_user_id, 'content')
       );
       $sub_form = drupal_get_form('dosm_sysadmin_iars_form', $sim_user['iars'], $sim_users, $params);
-      $output['sim_users'][$sim_user_id]['content']['tabs']['iar']['content'] = array(
+      $output['sim_users'][$sim_user_id]['content']['iar']['content'] = array(
         '#type' => 'item',
         '#markup' => drupal_render($sub_form),
         '#tree' => TRUE,
-        '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs', 'iar')
+        '#parents' => array('sim_users', $sim_user_id, 'content', 'iar')
       );
     }
 
     // show sims
-    $output['sim_users'][$sim_user_id]['content']['tabs']['sims'] = array(
+    $output['sim_users'][$sim_user_id]['content']['sims'] = array(
       '#type' => 'fieldset',
       '#title' => t('Sims'),
       '#tree' => TRUE,
-      '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs')
+      '#parents' => array('sim_users', $sim_user_id, 'content')
     );
-    $output['sim_users'][$sim_user_id]['content']['tabs']['sims']['content'] = array(
+    $output['sim_users'][$sim_user_id]['content']['sims']['content'] = array(
       '#type' => 'horizontal_tabs',
       '#tree' => TRUE,
       '#prefix' => '<div id="sim-user-'.$sim_user_id.'-content-tabs-sims-form">',
@@ -413,18 +412,18 @@ function dosm_sysadmin_sim_users_content($sim_users, $params) {
     foreach ($sim_user['sims'] as $sim_id => $sim) {
       $sim['sim_user_id'] = $sim_user_id;
       $sim['sim_id'] = $sim_id;
-      $output['sim_users'][$sim_user_id]['content']['tabs']['sims']['content'][$sim_id] = array(
+      $output['sim_users'][$sim_user_id]['content']['sims']['content'][$sim_id] = array(
         '#type' => 'fieldset',
         '#title' => $sim['name'],
         '#tree' => TRUE,
-        '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs', 'sims', 'content')
+        '#parents' => array('sim_users', $sim_user_id, 'content', 'sims', 'content')
       );
       $sub_content = dosm_sysadmin_sim_content($sim, $params);
-      $output['sim_users'][$sim_user_id]['content']['tabs']['sims']['content'][$sim_id]['content'] = array(
+      $output['sim_users'][$sim_user_id]['content']['sims']['content'][$sim_id]['content'] = array(
         '#type' => 'item',
         '#markup' => drupal_render($sub_content),
         '#tree' => TRUE,
-        '#parents' => array('sim_users', $sim_user_id, 'content', 'tabs', 'sims', 'content', $sim_id)
+        '#parents' => array('sim_users', $sim_user_id, 'content', 'sims', 'content', $sim_id)
       );
     }
   }

@@ -3,19 +3,6 @@
 function dosm_radmin_radmin_content($params) {
   $output = array();
 
-  // console
-  $output['console_command'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Console command'),
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
-  );
-  $sub_form = drupal_get_form('dosm_radmin_console_command_form', $params);
-  $output['console_command']['content'] = array(
-    '#type' => 'item',
-    '#markup' => drupal_render($sub_form),
-  );
-
   // presets
   $output['presets'] = array(
     '#type' => 'fieldset',
@@ -25,6 +12,19 @@ function dosm_radmin_radmin_content($params) {
   );
   $sub_form = drupal_get_form('dosm_radmin_presets_command_form', $params);
   $output['presets']['content'] = array(
+    '#type' => 'item',
+    '#markup' => drupal_render($sub_form),
+  );
+
+  // console
+  $output['console_command'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Console command'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  $sub_form = drupal_get_form('dosm_radmin_console_command_form', $params);
+  $output['console_command']['content'] = array(
     '#type' => 'item',
     '#markup' => drupal_render($sub_form),
   );
@@ -44,20 +44,13 @@ function dosm_radmin_console_command_form($form, &$form_state, $params) {
   );
 
   // console command
-  $form['console_command'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Console command'),
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
-    '#tree' => TRUE
-  );
-  $form['console_command']['command'] = array(
+  $form['command'] = array(
     '#type' => 'textfield',
     '#title' => t('Console command'),
     '#default_value' => '',
     '#description' => t('Send any OpenSimulator command to the simulator. example : "fcache clear" or "fcache assets" or "alert mytext"')
   );
-  $form['console_command']['button'] = array(
+  $form['button'] = array(
     '#type'  => 'button',
     '#name'  => 'console-command-button',
     '#value' => t('Send command'),
@@ -69,7 +62,7 @@ function dosm_radmin_console_command_form($form, &$form_state, $params) {
     ),
   );
 
-  $form['console_command']['answer'] = array(
+  $form['answer'] = array(
     '#type' => 'item',
   );
   return $form;
@@ -133,12 +126,12 @@ function dosm_radmin_send_command_callback($form, &$form_state) {
   switch ($form_state['clicked_button']['#name']) {
     // console command
     case 'console-command-button':
-      if ($form_state['values']['console_command']['command'] == "") {
+      if ($form_state['values']['command'] == "") {
         $form['answer']['#markup'] = t('Please, enter a command to send.');
         return $form;
       }
       $params['method'] = 'admin_console_command';
-      $params['params']['struct']['command'] = $form_state['values']['console_command']['command'];
+      $params['params']['struct']['command'] = $form_state['values']['command'];
       break;
     // fcache clear
     case 'fcache-clear-button':
