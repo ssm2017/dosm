@@ -150,7 +150,7 @@ function dosm_radmin_send_command_callback($form, &$form_state) {
   }
   else {
     if ($response['message'] == 'No answer') {
-      $form['answer']['#markup'] =  '<div class="messages warning">'. t('The command was sent but the simulator returned no answer'). '</div>';
+      $form['answer']['#markup'] =  '<div class="messages warning">'. t('The command was sent.'). '</div>';
     }
     else {
       $form['answer']['#markup'] =  '<div class="messages error">'. t('The system is not responding. Error code : @error', array('@error'=>$response['message'])). '</div>';

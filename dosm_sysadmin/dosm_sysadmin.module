@@ -183,20 +183,36 @@ function dosm_sysadmin_user_page($node) {
       '#suffix' => '</div>',
     );
 
-    // show values
-    $output['user_form']['values'] = array(
+    // show sims
+    $output['user_form']['sims'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Values'),
+      '#title' => t('Sims'),
       '#tree' => TRUE,
       '#parents' => array('user_form')
     );
-    $sub_content = dosm_sysadmin_values_content($sim_user);
-    $output['user_form']['values']['content'] = array(
-      '#type' => 'item',
-      '#markup' => drupal_render($sub_content),
+    $output['user_form']['sims']['content'] = array(
+      '#type' => 'horizontal_tabs',
       '#tree' => TRUE,
-      '#parents' => array('user_form', 'values')
+      '#prefix' => '<div id="user-sims-form">',
+      '#suffix' => '</div>'
     );
+    foreach ($sims as $sim_id => $sim) {
+      $sim['sim_user_id'] = $node->field_dosm_user_username[LANGUAGE_NONE][0]['value'];
+      $sim['sim_id'] = $sim_id;
+      $output['user_form']['sims']['content'][$sim_id] = array(
+        '#type' => 'fieldset',
+        '#title' => $sim['name'],
+        '#tree' => TRUE,
+        '#parents' => array('user_form', 'sims', 'content')
+      );
+      $sub_content = dosm_sysadmin_sim_content($sim, $params);
+      $output['user_form']['sims']['content'][$sim_id]['content'] = array(
+        '#type' => 'item',
+        '#markup' => drupal_render($sub_content),
+        '#tree' => TRUE,
+        '#parents' => array('user_form', 'sims', 'content', $sim_id)
+      );
+    }
 
     // show oars
     if ($sim_user['has_oar_folder']) {
@@ -232,36 +248,21 @@ function dosm_sysadmin_user_page($node) {
       );
     }
 
-    // show sims
-    $output['user_form']['sims'] = array(
+    // show values
+    $output['user_form']['values'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Sims'),
+      '#title' => t('Values'),
       '#tree' => TRUE,
       '#parents' => array('user_form')
     );
-    $output['user_form']['sims']['content'] = array(
-      '#type' => 'horizontal_tabs',
+    $sub_content = dosm_sysadmin_values_content($sim_user);
+    $output['user_form']['values']['content'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_content),
       '#tree' => TRUE,
-      '#prefix' => '<div id="user-sims-form">',
-      '#suffix' => '</div>',
+      '#parents' => array('user_form', 'values')
     );
-    foreach ($sims as $sim_id => $sim) {
-      $sim['sim_user_id'] = $node->field_dosm_user_username[LANGUAGE_NONE][0]['value'];
-      $sim['sim_id'] = $sim_id;
-      $output['user_form']['sims']['content'][$sim_id] = array(
-        '#type' => 'fieldset',
-        '#title' => $sim['name'],
-        '#tree' => TRUE,
-        '#parents' => array('user_form', 'sims', 'content')
-      );
-      $sub_content = dosm_sysadmin_sim_content($sim, $params);
-      $output['user_form']['sims']['content'][$sim_id]['content'] = array(
-        '#type' => 'item',
-        '#markup' => drupal_render($sub_content),
-        '#tree' => TRUE,
-        '#parents' => array('user_form', 'sims', 'content', $sim_id)
-      );
-    }
+
   }
   else {
     $output['sim_users'][] = array(
@@ -554,20 +555,22 @@ function dosm_sysadmin_sim_content($sim, $params) {
     '#suffix' => '</div>',
   );
 
-  // show values
-  $output['sim']['content']['values'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Values'),
-    '#tree' => TRUE,
-    '#parents' => array('sim', 'content')
-  );
-  $sub_content = dosm_sysadmin_values_content($sim);
-  $output['sim']['content']['values']['content'] = array(
-    '#type' => 'item',
-    '#markup' => drupal_render($sub_content),
-    '#tree' => TRUE,
-    '#parents' => array('sim', 'content', 'values')
-  );
+  // start/stop/kill
+  if ($sim['valid']) {
+    $output['sim']['content']['start_stop'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Start/Shutdown/kill'),
+      '#tree' => TRUE,
+      '#parents' => array('sim', 'content')
+    );
+    $sub_form = drupal_get_form('dosm_sysadmin_cmd_run_sim_form', $sim, $params);
+    $output['sim']['content']['start_stop']['content'] = array(
+      '#type' => 'item',
+      '#markup' => drupal_render($sub_form),
+      '#tree' => TRUE,
+      '#parents' => array('sim', 'content', 'start_stop')
+    );
+  }
 
   // log
   if ($sim['has_opensim_log']) {
@@ -583,23 +586,6 @@ function dosm_sysadmin_sim_content($sim, $params) {
       '#markup' => drupal_render($sub_form),
       '#tree' => TRUE,
       '#parents' => array('sim', 'content', 'show_log')
-    );
-  }
-
-  // start/stop/kill
-  if ($sim['valid']) {
-    $output['sim']['content']['start_stop'] = array(
-      '#type' => 'fieldset',
-      '#title' => t('Start/Stop/kill'),
-      '#tree' => TRUE,
-      '#parents' => array('sim', 'content')
-    );
-    $sub_form = drupal_get_form('dosm_sysadmin_cmd_run_sim_form', $sim, $params);
-    $output['sim']['content']['start_stop']['content'] = array(
-      '#type' => 'item',
-      '#markup' => drupal_render($sub_form),
-      '#tree' => TRUE,
-      '#parents' => array('sim', 'content', 'start_stop')
     );
   }
 
@@ -641,6 +627,21 @@ function dosm_sysadmin_sim_content($sim, $params) {
       '#parents' => array('sim', 'content', 'radmin')
     );
   }
+
+  // show values
+  $output['sim']['content']['values'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Values'),
+    '#tree' => TRUE,
+    '#parents' => array('sim', 'content')
+  );
+  $sub_content = dosm_sysadmin_values_content($sim);
+  $output['sim']['content']['values']['content'] = array(
+    '#type' => 'item',
+    '#markup' => drupal_render($sub_content),
+    '#tree' => TRUE,
+    '#parents' => array('sim', 'content', 'values')
+  );
 
   return $output;
 }
@@ -1426,6 +1427,13 @@ function dosm_sysadmin_cmd_show_log_form($form, &$form_state, $sim, $params) {
     '#type' => 'value',
     '#value' => $sim['path']
   );
+  // doc
+  $form['doc'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<div class="messages status">',
+    '#suffix' => '</div>',
+    '#markup' => t('Cliquer sur le bouton "Actualiser" pour rafraichir le journal.')
+  );
   // Logs
 
   /*if ($sim['has_tmux_log']) {
@@ -1445,6 +1453,20 @@ function dosm_sysadmin_cmd_show_log_form($form, &$form_state, $sim, $params) {
       '#value' => 'os',
     );
   /*}*/
+  // lines
+  $form['lines'] = array(
+    '#type' => 'select',
+    '#title' => t('Lines'),
+    '#options' => array(
+      '5' => '5',
+      '10' => '10',
+      '20' => '20',
+      '50' => '50',
+      '100' => '100'
+    ),
+    '#default_value' => '20'
+  );
+  // refresh button
   $form['button'] = array(
     '#type'  => 'button',
     '#name'  => 'show-log-button',
@@ -1472,7 +1494,8 @@ function dosm_sysadmin_cmd_show_log_callback($form, $form_state) {
       'params' => array(
         'password' => htmlspecialchars($form_state['values']['params']['params']['password']),
         'sim_path' => $form_state['values']['sim_path'],
-        'log_type' => $form_state['values']['log_type']
+        'log_type' => $form_state['values']['log_type'],
+        'lines' => $form_state['values']['lines']
       )
     );
     $response = dosm_xmlrpc_call($params);
@@ -1501,17 +1524,26 @@ function dosm_sysadmin_cmd_run_sim_form($form, &$form_state, $sim, $params) {
     '#type' => 'value',
     '#value' => $sim['path']
   );
+  // show doc
+  $form['doc'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<div class="messages warning">',
+    '#suffix' => '</div>',
+    '#markup' => t('Check the log to see the result after pushing one of these buttons. Depending on its content, the simulator can take a long time to start and beeing enabled because it has to start all the scripts. You should be patient, there is no reason to push every button several times.')
+  );
+  // display buttons
   $form['buttons'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Start / Stop'),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
+    '#title' => t('Start'),
+    /*'#collapsible' => TRUE,
+    '#collapsed' => TRUE*/
   );
   # show the form
   $form['buttons']['start'] = array(
     '#type'  => 'button',
     '#name'  => 'start-sim-button',
     '#value' => t('Start sim'),
+    '#suffix' => '<div>'. t('Start the simulator if it is stopped. The simulator is ready when the console shows : "LOGINS ENABLED"'). '</div>',
     '#ajax'  => array(
       'callback' => 'dosm_sysadmin_cmd_run_sim_callback',
       'wrapper'  => $unique_id,
@@ -1521,14 +1553,15 @@ function dosm_sysadmin_cmd_run_sim_form($form, &$form_state, $sim, $params) {
   );
   $form['buttons']['stop_kill'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Stop / Kill'),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
+    '#title' => t('Shutdown'),
+    /*'#collapsible' => TRUE,
+    '#collapsed' => TRUE,*/
   );
   $form['buttons']['stop_kill']['stop'] = array(
     '#type'  => 'button',
     '#name'  => 'stop-sim-button',
-    '#value' => t('Stop sim'),
+    '#value' => t('Shutdown sim'),
+    '#suffix' => '<div>'. t('Shutdown the simulator. The simulator is stopped when the console shows : "Exiting..."'). '</div>',
     '#ajax'  => array(
       'callback' => 'dosm_sysadmin_cmd_run_sim_callback',
       'wrapper'  => $unique_id,
@@ -1539,13 +1572,14 @@ function dosm_sysadmin_cmd_run_sim_form($form, &$form_state, $sim, $params) {
   $form['buttons']['stop_kill']['kill'] = array(
     '#type' => 'fieldset',
     '#title' => t('Kill'),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
+    /*'#collapsible' => TRUE,
+    '#collapsed' => TRUE,*/
   );
   $form['buttons']['stop_kill']['kill']['button'] = array(
     '#type'  => 'button',
     '#name'  => 'kill-sim-button',
     '#value' => t('Kill sim'),
+    '#suffix' => '<div>'. t('Kill the session if the simulator is deadpan.'). '</div>',
     '#ajax'  => array(
       'callback' => 'dosm_sysadmin_cmd_run_sim_callback',
       'wrapper'  => $unique_id,
