@@ -1432,7 +1432,7 @@ function dosm_sysadmin_cmd_show_log_form($form, &$form_state, $sim, $params) {
     '#type' => 'markup',
     '#prefix' => '<div class="messages status">',
     '#suffix' => '</div>',
-    '#markup' => t('Cliquer sur le bouton "Actualiser" pour rafraichir le journal.')
+    '#markup' => t('Click on the button "Refresh" to refresh the logs.')
   );
   // Logs
 
