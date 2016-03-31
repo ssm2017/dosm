@@ -655,6 +655,19 @@ function dosm_sysadmin_regions_content($regions, $params) {
       '#collapsible' => TRUE,
       '#collapsed' => FALSE
     );
+    // show regionimage
+    /*$output[$k]['image'] = array(
+      '#type' => 'item',
+      '#markup' => theme_image(
+        array(
+          'path' => 'http://'. $params['url']. ':'. $params['sim']['port']. '/index.php?method=regionImage'. str_replace('-', '', $region['region_uuid']),
+          'width' => '120px',
+          'height' => '120px',
+          'title' => t('Picture of !region_name', array('!region_name' => $region['name'])),
+          'attributes' => array()
+        )
+      )
+    );*/
     // show values
     $sub_content = dosm_sysadmin_values_content($region);
     $output[$k]['values'] = array(
@@ -1551,6 +1564,18 @@ function dosm_sysadmin_cmd_run_sim_form($form, &$form_state, $sim, $params) {
       'effect'   => 'fade',
     ),
   );
+  $form['buttons']['restart'] = array(
+    '#type'  => 'button',
+    '#name'  => 'restart-sim-button',
+    '#value' => t('Restart sim'),
+    '#suffix' => '<div>'. t('Restart the simulator. The simulator is ready when the console shows : "LOGINS ENABLED"'). '</div>',
+    '#ajax'  => array(
+      'callback' => 'dosm_sysadmin_cmd_run_sim_callback',
+      'wrapper'  => $unique_id,
+      'method'   => 'replace',
+      'effect'   => 'fade',
+    ),
+  );
   $form['buttons']['stop_kill'] = array(
     '#type' => 'fieldset',
     '#title' => t('Shutdown'),
@@ -1609,6 +1634,9 @@ function dosm_sysadmin_cmd_run_sim_callback($form, $form_state) {
   switch($form_state['clicked_button']['#name']) {
     case 'start-sim-button':
       $params['params']['action'] = 'start';
+      break;
+    case 'restart-sim-button':
+      $params['params']['action'] = 'restart';
       break;
     case 'stop-sim-button':
       $params['params']['action'] = 'stop';
